@@ -1,6 +1,7 @@
 from docx import Document
 import openai
 import os
+import numpy as np
 
 from openai import OpenAIError
 
@@ -8,7 +9,7 @@ history = []
 job_compare=""
 job_description = ""
 job_lines=[]
-
+job_embeddings=""
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY").strip())
 
 def resumebot(resume):
@@ -34,6 +35,16 @@ if resume is None:
 resume_text= '\n'.join(resume)
 
 
+def get_embedding(input):
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=input,
+        encoding_format="float"
+    )
+    return response.data[0].embedding
+
+
+resume_embeddings =get_embedding(resume_text)
 system_prompt= f""" you are a professional resume assistant.
 
 RESUME CONTENT:
@@ -58,7 +69,6 @@ RESPONSE FORMAT:
 
 """
 
-
 history.append({"role": "system", "content": system_prompt})
 
 def get_completion(prompt):
@@ -70,6 +80,7 @@ def get_completion(prompt):
             temperature=0,
             messages=history,
         )
+
         message = responsefromai.choices[0].message.content
         history.append({"role": "assistant", "content": message})
         return message
@@ -88,7 +99,7 @@ while True:
     if user_input.lower() == "exit":
         break
     elif user_input == "":
-        print("Please enter an input")
+        # print("Please enter an input")
         continue
     elif user_input.lower() == "help":
         print(f"""  
@@ -124,6 +135,8 @@ while True:
         print("type 'done' when finished.")
         while True:
              job_description = input()
+             if job_description.lower() == "":
+                 continue
              if job_description.lower() == "done":
                  break
              else:
@@ -131,15 +144,30 @@ while True:
 
 
         job_compare='\n'.join(job_lines)
+
         if not job_compare:
             print("no job description provided, please provide a job description'")
             continue
         history.append({"role": "user", "content": job_compare})
         responsefromai = get_completion(f"Analyse the job against the resume. {job_compare}")
         print(f"Bot: {responsefromai}")
+        job_embeddings=get_embedding(job_compare)
+    elif user_input.lower() == "match score":
+        if not job_compare :
+            print("please provide a job description")
+            continue
+       # cosinesimilarity - measuring how similar 2 vectors are / distance between vectors
+        np_resume = np.array(resume_embeddings)
+        np_job_embeddings=np.array(job_embeddings)
+        dotproduct = np.dot(np_resume, np_job_embeddings)
+        magnitude = np.linalg.norm(resume_embeddings) * np.linalg.norm(job_embeddings)
+        cosinesimilarity = dotproduct / magnitude
+        print(f"Bot: {cosinesimilarity}")
     else:
         responsefromai = get_completion(user_input)
         print(f"Bot: {responsefromai}")
+
+
 
 
 
