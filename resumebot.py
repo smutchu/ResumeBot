@@ -1,25 +1,50 @@
+
+import chromadb
 from docx import Document
 import openai
 import os
-import numpy as np
+
 
 from openai import OpenAIError
+chroma_client = chromadb.Client()
+chromadbcollection = chroma_client.create_collection(name="resume_db")
 
 history = []
 job_compare=""
 job_description = ""
 job_lines=[]
-job_embeddings=""
+list_paragraphs=[]
+list_vector=[]
+id_list=[]
+job_embeddings=[]
+
+
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY").strip())
+
+def get_embedding(input):
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=input,
+        encoding_format="float",
+    )
+    return response.data[0].embedding
 
 def resumebot(resume):
  try:
     doc = Document(resume)
-    alltext = []
     for paragraph in doc.paragraphs:
-     alltext.append(paragraph.text)
+        if paragraph is not None and len(paragraph.text) > 20:
+            list_paragraphs.append(paragraph.text)
+    for item in range(len(list_paragraphs)):
+        i=list_paragraphs[item]
+        response = get_embedding(i)
+        list_vector.append( response)
+        id_list.append(f"Chunk_" + str(item))
+    chromadbcollection.add(ids=id_list,
+                   documents=list_paragraphs,
+                   embeddings=list_vector,)
     print("Resume loaded successfully")
-    return alltext
+
  except OSError as e:
      print(f"OSError occurred while loading the resume, {e}")
      return None
@@ -28,71 +53,30 @@ def resumebot(resume):
      return None
 
 
-resume = resumebot(os.getenv("RESUME_PATH", "data/Test_Resume_Sample.docx"))
-if resume is None:
-    print("Failed to load resume, exiting")
-    exit()
-resume_text= '\n'.join(resume)
-
-
-def get_embedding(input):
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=input,
-        encoding_format="float"
-    )
-    return response.data[0].embedding
-
-
-resume_embeddings =get_embedding(resume_text)
-system_prompt= f""" you are a professional resume assistant.
-
-RESUME CONTENT:
-{resume_text}
-
-YOUR ROLE:
-- Answer questions about this resume accurately and professionally.
-- keep answers concise but complete (2-4 sentences max)
-- use bullet points for lists
-- be Friendly but professional
-
-RULES:
-- ONLY use information from the resume provided.
-- if information is not in the resume, say: "I don't see that information in the resume"
-- if asked about a tool that is not listed , mention similar/related tools from the resume
-- Don't make up or assume information
-
-RESPONSE FORMAT:
-- be clear and well structured
-- use bullet points for lists of skills and experience
-- include relevant details when available
-
-"""
-
+resumebot(os.getenv("RESUME_PATH", "data/Test_Resume_Sample.docx"))
+system_prompt = f"You are a professional resume assistant. Answer questions only based on the context provided."
 history.append({"role": "system", "content": system_prompt})
 
 def get_completion(prompt):
-    history.append({"role": "user", "content": prompt})
-
     try:
+        vector=get_embedding(prompt)
+        chunks = chromadbcollection.query(query_embeddings=[vector],
+                                   n_results=2)
+        extracted_chunks = chunks["documents"][0]
+        history.append({"role": "user", "content": f"Here are the relevant parts of the resume: {extracted_chunks}. Now answer this: {prompt}"})
         responsefromai = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0,
             messages=history,
         )
-
         message = responsefromai.choices[0].message.content
         history.append({"role": "assistant", "content": message})
         return message
-
     except OpenAIError as e:
         print(f"Error connecting to OpenAI: {e}")
         history.pop()
         return None
 
-summary = get_completion("Please provide a brief summary of the resume including Name, Years of Experience, Key Skills, and Current Role.")
-
-print(summary)
 
 while True:
     user_input= input("User: ")
@@ -148,7 +132,6 @@ while True:
         if not job_compare:
             print("no job description provided, please provide a job description'")
             continue
-        history.append({"role": "user", "content": job_compare})
         responsefromai = get_completion(f"Analyse the job against the resume. {job_compare}")
         print(f"Bot: {responsefromai}")
         job_embeddings=get_embedding(job_compare)
@@ -156,13 +139,10 @@ while True:
         if not job_compare :
             print("please provide a job description")
             continue
-       # cosinesimilarity - measuring how similar 2 vectors are / distance between vectors
-        np_resume = np.array(resume_embeddings)
-        np_job_embeddings=np.array(job_embeddings)
-        dotproduct = np.dot(np_resume, np_job_embeddings)
-        magnitude = np.linalg.norm(resume_embeddings) * np.linalg.norm(job_embeddings)
-        cosinesimilarity = dotproduct / magnitude
-        print(f"Bot: {cosinesimilarity}")
+        results= chromadbcollection.query(query_embeddings= [job_embeddings],
+                         n_results=2)
+        responsefromai = get_completion(f"Based on this job description: {job_compare}. Give a match score out of 100 and explain why")
+        print(responsefromai)
     else:
         responsefromai = get_completion(user_input)
         print(f"Bot: {responsefromai}")
