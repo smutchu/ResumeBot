@@ -6,7 +6,8 @@ Stack
 LangChain, ChromaDB, HuggingFace Embeddings, Ollama (llama3.2), Streamlit
 
 Run it
-bashpip install langchain langchain-chroma langchain-huggingface langchain-ollama streamlit python-docx
+
+pip install langchain langchain-chroma langchain-huggingface langchain-ollama streamlit python-docx
 
 # install ollama from ollama.com then:
 ollama pull llama3.2
