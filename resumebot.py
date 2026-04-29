@@ -26,6 +26,7 @@ job_embeddings=[]
 
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY").strip())
 
+@st.cache_resource
 def get_embedding(input):
     response = client.embeddings.create(
         model="text-embedding-3-small",
@@ -57,7 +58,8 @@ def resumebot(resume):
      print(f"Exception occurred while loading the resume, {e}")
      return None
 
-resumebot(os.getenv("RESUME_PATH", "data/Test_Resume_Sample.docx"))
+resumebot("/Users/hravs/Python_projects/ResumeBot/data/Test_Resume_Sample.docx")
+
 system_prompt = f"You are a professional resume assistant. Answer questions only based on the context provided."
 if len(st.session_state.history) == 0:
     st.session_state.history.append({"role": "system", "content": system_prompt})
