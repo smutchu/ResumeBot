@@ -4,7 +4,9 @@ from docx import Document as DocxDocument
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
+from langchain_core.prompts import ChatPromptTemplate
 import streamlit as st
+from langchain_core.output_parsers import StrOutputParser
 
 list_paragraphs=[]
 
@@ -35,11 +37,18 @@ def loadresume(resume):
 def InvokeOllama(prompt,vector_store):
     embed_query=vector_store.similarity_search(prompt,k=2)
     context = "\n\n".join([doc.page_content for doc in embed_query])  
-    system = SystemMessage(f"You are a resume assistant. Answer only based on this resume context: {context}")
-    human = HumanMessage(prompt)
-    response = model.invoke([system, human])
-    return response.content
+    
+    
+    template = ChatPromptTemplate.from_messages([
+          ("system", "You are a resume assistant. Answer only based on this resume context {context}"),
+          ("human", "{question}")
+       ])
+    
+    chain = template | model | parser
+    response = chain.invoke({"context":context, "question":prompt})
+    return response
 
+parser = StrOutputParser()
 model = ChatOllama(model="llama3.2")
 vector=loadresume("/Users/hravs/Python_projects/ResumeBot/data/Test_Resume_Sample.docx")
 # message= HumanMessage(get_completion("what is the name of candidate?",vector))
@@ -55,6 +64,7 @@ for history in st.session_state.messages:
 user = st.chat_input("hello , your chatbot is here")
 if user:
     result=InvokeOllama(user,vector)
+
     st.session_state.messages.append({"role":"user","content":user})
     st.session_state.messages.append({"role":"assistant","content":result})
     st.rerun()
