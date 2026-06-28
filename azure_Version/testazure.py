@@ -1,8 +1,8 @@
 from langchain_openai import AzureOpenAIEmbeddings
 
 # 1. Your exact values
-OPENAI_API_BASE = "https://my-openai-resource-sm04.openai.azure.com/"
-OPENAI_API_KEY = "FHmsqHKUZyQ6xx1dvggLfEURGV7g9aRNdDz9fkmOiXy1FPOQ8WlbJQQJ99CEACYeBjFXJ3w3AAABACOGPf3X"
+OPENAI_API_BASE = "https://my-openai-xxx/"
+OPENAI_API_KEY = "xxx"
 OPENAI_API_VERSION = "2024-02-01" # Required for text-embedding-3 models
 DEPLOYMENT_NAME = "embed-test-east"
 
